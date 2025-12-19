@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>amir b yayu</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:linear-gradient(135deg,#141e30,#243b55);
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.container{
+  background:#fff;
+  width:400px;
+  padding:20px;
+  border-radius:12px;
+  box-shadow:0 15px 40px rgba(0,0,0,.4);
+}
+h2{text-align:center}
+input,button,select{
+  width:100%;
+  padding:10px;
+  margin:6px 0;
+}
+button{
+  background:#243b55;
+  color:#fff;
+  border:none;
+  border-radius:5px;
+  cursor:pointer;
+}
+.hidden{display:none}
+.balance{
+  font-size:22px;
+  text-align:center;
+  margin:10px 0;
+}
+.card{
+  background:linear-gradient(135deg,#000428,#004e92);
+  color:#fff;
+  padding:15px;
+  border-radius:10px;
+  margin:10px 0;
+  font-size:14px;
+}
+.actions{display:flex;gap:5px;flex-direction:column}
+.transactions{
+  max-height:120px;
+  overflow:auto;
+  font-size:13px;
+}
+.transactions div{
+  border-bottom:1px solid #ddd;
+  padding:4px;
+}
+.switch{
+  text-align:center;
+  cursor:pointer;
+  color:#243b55;
+}
+</style>
+</head>
+
+<body>
+
+<!-- AUTH -->
+<div class="container" id="authBox">
+  <h2 id="title">Login amir b yayu banking</h2>
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
+  <input id="pin" type="password" placeholder="4-digit PIN">
+  <button onclick="auth()">Login</button>
+  <div class="switch" onclick="toggle()">Create Account</div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="container hidden" id="dashboard">
+  <h2>Welcome <span id="user"></span></h2>
+  <div class="balance">$<span id="balance">0</span></div>
+
+  <div class="card hidden" id="card">
+    <div>MyBank Credit Card</div>
+    <div id="cardNumber"></div>
+    <div>EXP: <span id="exp"></span> | CVV: <span id="cvv"></span></div>
+  </div>
+
+  <button onclick="showCard()">Show Card (PIN)</button>
+
+  <input id="amount" type="number" placeholder="Amount">
+
+  <div class="actions">
+    <button onclick="deposit()">Deposit</button>
+    <button onclick="withdraw()">Withdraw</button>
+  </div>
+
+  <h3>Transfer Money</h3>
+  <input id="transferAmount" type="number" placeholder="Amount to transfer">
+  <select id="transferUser"></select>
+  <button onclick="transfer()">Send Money</button>
+
+  <div class="transactions" id="transactions"></div>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<script>
+let isLogin=true,currentUser=null;
+
+const rand=(n)=>Math.floor(Math.random()*n);
+const cardGen=()=>({
+  number:`4000 ${rand(9999)} ${rand(9999)} ${rand(9999)}`,
+  exp:`${rand(12)+1}/2${rand(9)}`,
+  cvv:rand(900)+100
+});
+
+const users=()=>JSON.parse(localStorage.getItem("users"))||[];
+const save=u=>localStorage.setItem("users",JSON.stringify(u));
+
+function toggle(){
+  isLogin=!isLogin;
+  title.innerText=isLogin?"Login":"Sign Up";
+  authBox.querySelector("button").innerText=isLogin?"Login":"Sign Up";
+}
+
+function auth(){
+  let u=username.value.trim(),p=password.value.trim(),pi=pin.value.trim();
+  if(!u||!p||pi.length!==4)return alert("Fill all fields (PIN 4 digits)");
+  let all=users();
+
+  if(!isLogin){
+    if(all.find(x=>x.username===u))return alert("User exists");
+    all.push({
+      username:u,password:p,pin:pi,
+      balance:1000,transactions:[],
+      card:cardGen()
+    });
+    save(all); alert("Account created"); toggle(); return;
+  }
+
+  let user=all.find(x=>x.username===u&&x.password===p&&x.pin===pi);
+  if(!user)return alert("Invalid login");
+  currentUser=user;
+  authBox.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+  userSpan.innerText=user.username;
+  populateTransferUsers();
+  update();
+}
+
+function update(){
+  balance.innerText=currentUser.balance;
+  transactions.innerHTML="";
+  currentUser.transactions.slice().reverse()
+    .forEach(t=>transactions.innerHTML+=`<div>${t}</div>`);
+}
+
+function deposit(){
+  let a=+amount.value;
+  if(a<=0)return;
+  currentUser.balance+=a;
+  currentUser.transactions.push(`+ $${a} Deposit`);
+  persist();
+}
+
+function withdraw(){
+  let a=+amount.value;
+  if(a<=0||a>currentUser.balance)return alert("Invalid");
+  currentUser.balance-=a;
+  currentUser.transactions.push(`- $${a} Withdraw`);
+  persist();
+}
+
+function transfer(){
+  let amt=+transferAmount.value;
+  let recipient=transferUser.value;
+  if(amt<=0)return alert("Enter valid amount");
+  if(amt>currentUser.balance)return alert("Insufficient funds");
+  if(recipient===currentUser.username)return alert("Cannot send to self");
+
+  let all=users();
+  let rUser=all.find(u=>u.username===recipient);
+  if(!rUser)return alert("Recipient not found");
+
+  currentUser.balance-=amt;
+  rUser.balance+=amt;
+  currentUser.transactions.push(`- $${amt} Sent to ${recipient}`);
+  rUser.transactions.push(`+ $${amt} Received from ${currentUser.username}`);
+
+  save(all);
+  transferAmount.value="";
+  update();
+  alert(`Transferred $${amt} to ${recipient}`);
+}
+
+function persist(){
+  let all=users().map(u=>u.username===currentUser.username?currentUser:u);
+  save(all); amount.value=""; update();
+}
+
+function showCard(){
+  let p=prompt("Enter PIN");
+  if(p!==currentUser.pin)return alert("Wrong PIN");
+  card.classList.remove("hidden");
+  cardNumber.innerText=currentUser.card.number;
+  exp.innerText=currentUser.card.exp;
+  cvv.innerText=currentUser.card.cvv;
+}
+
+function populateTransferUsers(){
+  transferUser.innerHTML="";
+  users().forEach(u=>{
+    if(u.username!==currentUser.username)
+      transferUser.innerHTML+=`<option value="${u.username}">${u.username}</option>`;
+  });
+}
+
+function logout(){
+  currentUser=null;
+  dashboard.classList.add("hidden");
+  authBox.classList.remove("hidden");
+  card.classList.add("hidden");
+}
+</script>
+
+</body>
+</html>
